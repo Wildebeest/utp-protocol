@@ -4,11 +4,17 @@
   "description": "A duplex stream implementation of uTP",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tape test/*.js"
   },
   "keywords": [
     "utp"
   ],
   "author": "Matt Wilde",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "inherits": "^2.0.1"
+  },
+  "devDependencies": {
+    "tape": "^2.14.0"
+  }
 }
