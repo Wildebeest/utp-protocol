@@ -60,17 +60,19 @@ uTP.prototype._writeMessage = function (type, dataBuffer, port, address, callbac
 	this._socket.send(messageBuffer, 0, messageBuffer.length, port, address, callback);
 };
 
+function Packet(msg) {
+	this.packetType = msg[0] >> 4;
+	this.hasExtensions = msg[1] !== 0;
+	this.connectionId = msg.readUInt16BE(2);
+	this.timestamp = msg.readUInt32BE(4);
+	this.timestampDiff = msg.readUInt32BE(8);
+	this.windowSize = msg.readUInt32BE(12);
+	this.sequenceNumber = msg.readUInt16BE(16);
+	this.ackNumber = msg.readUInt16BE(18);
+}
+
 uTP.prototype._onMessage = function (msg, rinfo) {
-	var packet = {
-		type: msg[0] >> 4,
-		hasExtensions: msg[1] !== 0,
-		connectionId: msg.readUInt16BE(2),
-		timestamp_microseconds: msg.readUInt32BE(4),
-		timestamp_difference_microseconds: msg.readUInt32BE(8),
-		wnd_size: msg.readUInt32BE(12),
-		seq_nr: msg.readUInt16BE(16),
-		ack_nr: msg.readUInt16BE(18)
-	};
+	var packet = new Packet(msg);
 
 	console.log("packet: %j", packet);
 
@@ -89,27 +91,23 @@ uTP.prototype._onMessage = function (msg, rinfo) {
 		}
 	}
 
-	switch(packet.type) {
-		case PacketType.Syn:
-			this._connectionId = packet.connectionId;
-			this._ackNumber = packet.seq_nr;
-			this._writeMessage(PacketType.State, null, rinfo.port, rinfo.address);
-			break;
-		case PacketType.Data:
-			console.log("got data packet");
-			if(this._ackNumber + 1 === packet.seq_nr) {
-				this.push(msg.slice(dataIndex));
-				this._ackNumber = packet.seq_nr;
-				this._writeMessage(PacketType.State, null, rinfo.port, rinfo.address);
-			} else {
-				console.warn("out of order packet");
-			}
-			break;
-		case PacketType.Fin:
-			this._ackNumber = packet.seq_nr;
-			this._writeMessage(PacketType.State, null, rinfo.port, rinfo.address);
-			break;
+	if(packet.packetType === PacketType.Syn || (this._ackNumber + 1 === packet.sequenceNumber)) {
+		switch(packet.packetType) {
+			case PacketType.Syn:
+				this._connectionId = packet.connectionId;
+				break;
+			case PacketType.Data:
+				this.push(msg.slice(dataIndex)); 
+				break;
+			case PacketType.Fin:
+				this.push(null);
+				break;
+		}
+
+		this._ackNumber = packet.sequenceNumber;
+		this._writeMessage(PacketType.State, null, rinfo.port, rinfo.address);
 	}
+			
 };
 
 // Readable implementation

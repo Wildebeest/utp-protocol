@@ -9,4 +9,13 @@ test('constructor', function (t) {
 	var stream = new uTP(socket);
 	socket.bind(1337);
 
+	stream.on('data', function(chunk) {
+	  console.log('got %d bytes of data', chunk.length);
+	  console.log(chunk.toString());
+	});
+	stream.on('end', function() {
+	  console.log('there will be no more data.');
+	  t.ok(true);
+	});
+
 });
