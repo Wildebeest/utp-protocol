@@ -5,17 +5,8 @@ var dgram = require('dgram');
 test('constructor', function (t) {
 	t.plan(1);
 
-	var stream = new uTP();
-	stream.listen(1337);
-
-	var message = new Buffer("hello UDP");
 	var socket = dgram.createSocket('udp4');
-	socket.send(message, 0, message.length, 1337, "localhost");
+	var stream = new uTP(socket);
+	socket.bind(1337);
 
-	setTimeout(
-		function (err, bytes) {
-			t.ok(stream);
-			socket.close();
-			stream.close();
-		}, 1000);
 });
