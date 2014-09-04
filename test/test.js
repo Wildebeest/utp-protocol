@@ -62,6 +62,9 @@ test("packet field parsing", function (t) {
 		}
 	}
 
+	t.ok(packet.data, "data should exist");
+	t.equal(packet.data.length, 0, "data should be empty");
+
 	t.end();
 });
 
