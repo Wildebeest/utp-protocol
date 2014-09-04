@@ -36,6 +36,7 @@ function Packet(msg) {
 			if(extensionType) {
 				var extensionLength = msg[dataIndex++];
 				this.extensions[extensionType] = msg.slice(dataIndex, dataIndex + extensionLength);
+				dataIndex += extensionLength;
 			} else {
 				break;
 			}

@@ -98,6 +98,37 @@ test("packet extension parsing", function(t) {
 	t.end();
 });
 
+test("packet extension parsing with data", function(t) {
+	// 20 bytes for the header, 5 bytes for the "extension", 1 byte for termination
+	var buffer = new Buffer(26);
+	var headerOptions = {
+		extension: 1
+	};
+	writeHeader(buffer, headerOptions);
+	buffer[20] = 5; 	// extension type
+	buffer[21] = 1; 	// length
+	buffer[22] = 1;		
+	buffer[23] = 0;		// null terminator
+	buffer[24] = 2;		
+	buffer[25] = 3;		
+
+	var packet = new uTP.Packet(buffer);
+	console.log(packet);
+
+	t.ok(packet.hasExtensions, "this packet has extensions");
+	t.ok(packet.extensions, "this packet has an extension map");
+
+	var extensionBuffer = packet.extensions[5];
+	t.ok(extensionBuffer, "the 5 extension should be defined");
+	t.equal(extensionBuffer.length, 1, "the extension should be 1 byte");
+	t.equal(extensionBuffer[0], 1);
+	t.equal(packet.data.length, 2, "data should be 2 bytes");
+	t.equal(packet.data[0], 2);
+	t.equal(packet.data[1], 3);
+
+	t.end();
+});
+
 test.skip('constructor', function (t) {
 	t.plan(1);
 
