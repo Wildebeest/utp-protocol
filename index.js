@@ -32,13 +32,11 @@ function Packet(msg) {
 	if(this.hasExtensions) {
 		this.extensions = {};
 		while (dataIndex < msg.length) {
-			var extensionType = msg[dataIndex];
+			var extensionType = msg[dataIndex++];
 			if(extensionType) {
-				var extensionLength = msg[dataIndex + 1];
+				var extensionLength = msg[dataIndex++];
 				this.extensions[extensionType] = msg.slice(dataIndex, dataIndex + extensionLength);
-				dataIndex += extensionLength + 2;
 			} else {
-				dataIndex += 1;
 				break;
 			}
 		}

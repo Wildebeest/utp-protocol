@@ -35,7 +35,7 @@ test("packet field parsing", function (t) {
 	var test16 = 0x8001;
 	var test32 = 0x80000001;
 
-	// 20 bytes for the header, 2 null bytes for the "extension"
+	// 20 bytes for the header, 1 null byte for the "extension"
 	var buffer = new Buffer(21);
 	var headerOptions = {
 		type: test4,
@@ -56,13 +56,43 @@ test("packet field parsing", function (t) {
 
 	for(var field in headerOptions) {
 		if(field === "extension") {
-			t.equal(packet.hasExtensions, true, "hasExtension");
+			t.equal(packet.hasExtensions, true, "hasExtensions");
 		} else {
 			t.equal(packet[field], headerOptions[field], field);
 		}
 	}
 
 	t.ok(packet.data, "data should exist");
+	t.equal(packet.data.length, 0, "data should be empty");
+
+	t.end();
+});
+
+test("packet extension parsing", function(t) {
+	// 20 bytes for the header, 5 bytes for the "extension", 1 byte for termination
+	var buffer = new Buffer(26);
+	var headerOptions = {
+		extension: 1
+	};
+	writeHeader(buffer, headerOptions);
+	buffer[20] = 5; 	// extension type
+	buffer[21] = 3; 	// length
+	buffer[22] = 1;		
+	buffer[23] = 0;
+	buffer[24] = 1;
+	buffer[25] = 0;		// null terminator
+
+	var packet = new uTP.Packet(buffer);
+	console.log(packet);
+
+	t.ok(packet.hasExtensions, "this packet has extensions");
+	t.ok(packet.extensions, "this packet has an extension map");
+
+	var extensionBuffer = packet.extensions[5];
+	t.ok(extensionBuffer, "the 5 extension should be defined");
+	t.equal(extensionBuffer.length, 3, "the extension should be 3 bytes");
+	t.equal(extensionBuffer[0], 1);
+	t.equal(extensionBuffer[2], 1);
 	t.equal(packet.data.length, 0, "data should be empty");
 
 	t.end();
