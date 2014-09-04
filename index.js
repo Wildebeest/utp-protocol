@@ -1,7 +1,7 @@
-var inherits = require('inherits');
-var stream = require('stream');
-var dgram = require('dgram');
-var net = require('net');
+var inherits = require("inherits");
+var stream = require("stream");
+var dgram = require("dgram");
+var net = require("net");
 
 function rand16() {
 	return Math.floor(Math.random() * 65535);
@@ -60,7 +60,6 @@ function Connection (socket) {
 	this._ackNumber = 0;
 
 	this._socket = socket;
-	socket.on('message', this._onMessage.bind(this));
 }
 
 Connection.prototype._writeMessage = function (type, dataBuffer, port, address, callback) {
@@ -119,7 +118,7 @@ exports.Connection = Connection;
 function Server (socket) {
 	this._connections = { };
 	this._socket = socket;
-	socket.on('message', this._onMessage.bind(this));
+	socket.on("message", this._onMessage.bind(this));
 }
 
 Server.prototype.listen = function (port) {

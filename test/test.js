@@ -129,6 +129,35 @@ test("packet extension parsing with data", function(t) {
 	t.end();
 });
 
+test("packet parsing with data and no extensions", function(t) {
+	// 20 bytes for the header, 5 bytes for data
+	var buffer = new Buffer(25);
+	var headerOptions = {
+		extension: 0
+	};
+	writeHeader(buffer, headerOptions);
+	buffer[20] = 0;
+	buffer[21] = 1;
+	buffer[22] = 2;		
+	buffer[23] = 3;	
+	buffer[24] = 4;	
+
+	var packet = new uTP.Packet(buffer);
+	console.log(packet);
+
+	t.notOk(packet.hasExtensions, "this packet has no extensions");
+	t.notOk(packet.extensions, "this packet has no extension map");
+
+	t.equal(packet.data.length, 5, "data should be 5 bytes");
+	t.equal(packet.data[0], 0);
+	t.equal(packet.data[1], 1);
+	t.equal(packet.data[2], 2);
+	t.equal(packet.data[3], 3);
+	t.equal(packet.data[4], 4);
+
+	t.end();
+});
+
 test.skip('constructor', function (t) {
 	t.plan(1);
 
