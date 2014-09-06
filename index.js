@@ -15,9 +15,21 @@ var PacketType = {
 	Reset: 3,
 	Syn: 4
 };
-var Version = 1;
 
-function Packet(msg) {
+function Packet() {
+
+}
+Packet.prototype.type = PacketType.Data;
+Packet.prototype.version = 1;
+Packet.prototype.hasExtensions = false;
+Packet.prototype.connectionId = 0;
+Packet.prototype.timestamp = 0;
+Packet.prototype.timestampDiff = 0;
+Packet.prototype.windowSize = 0;
+Packet.prototype.sequenceNumber = 0;
+Packet.prototype.ackNumber = 0;
+
+Packet.prototype.fromBuffer = function (msg) {
 	this.type = msg[0] >> 4;
 	this.version = msg[0] & 0xF;
 	this.hasExtensions = msg[1] !== 0;
@@ -44,14 +56,45 @@ function Packet(msg) {
 	}
 
 	this.data = msg.slice(dataIndex);
-}
+};
+
+Packet.prototype.toBuffer = function () {
+	var buffer = new Buffer(20 + ((dataBuffer && dataBuffer.length) || 0));
+
+	buffer.writeUInt8((this.type << 4) + this.version, 0);
+	buffer.writeUInt8(this.hasExtensions ? 1 : 0, 1);
+	buffer.writeUInt16BE(this.connectionId, 2);
+	buffer.writeUInt32BE(this.timestamp, 4);
+	buffer.writeUInt32BE(this.timestampDiff, 8);
+	buffer.writeUInt32BE(this.windowSize, 12);
+	buffer.writeUInt16BE(this.sequenceNumber, 16);
+	buffer.writeUInt16BE(this.ackNumber, 18);
+
+	var dataIndex = 20;
+	if(this.hasExtensions) {
+		Object.keys(this.extensions).forEach(function (extensionType) {
+			var extension = this.extensions[extensionType];
+			buffer[dataIndex++] = extensionType;
+			buffer[dataIndex++] = extension.length;
+			extension.copy(buffer, dataIndex);
+			dataIndex += extension.length;
+		});
+	}
+	
+	if(this.data) {
+		this.data.copy(buffer, dataIndex);
+	}
+
+	return buffer;
+};
+
 exports.Packet = Packet;
 
 inherits(Connection, stream.Duplex);
 function Connection (socket) {
 	stream.Duplex.call(this);
 
-	this._connectionId = rand16();
+	this._connectionId = 0;
 	this._currentWindow = 0;
 	this._maxWindow = 0;
 	this._windowSize = 0;
@@ -63,25 +106,22 @@ function Connection (socket) {
 }
 
 Connection.prototype._writeMessage = function (type, dataBuffer, port, address, callback) {
-	var messageBuffer = new Buffer(20 + ((dataBuffer && dataBuffer.length) || 0));
-
-	messageBuffer.writeUInt8((type << 4) + Version, 0);
-	messageBuffer.writeUInt8(0, 1); // extension
-	messageBuffer.writeUInt16BE(this._connectionId, 2);
-	messageBuffer.writeUInt32BE(this._replyMicroseconds, 8);
-	messageBuffer.writeUInt32BE(16000, 12); // receive buffer size
-	messageBuffer.writeUInt16BE(this._sequenceNumber, 16);
-	messageBuffer.writeUInt16BE(this._ackNumber, 18);
-	messageBuffer.writeUInt32BE(process.hrtime()[1], 4); // timestamp_microseconds, last to cut down on delay
-
-	if(dataBuffer) {
-		dataBuffer.copy(messageBuffer, 20);
-	}
+	var packet = new Packet();
+	
+	packet.type = type;
+	packet.connectionId = this._connectionId;
+	packet.timestamp = process.hrtime()[1];
+	packet.timestampDiff = this._replyMicroseconds;
+	packet.windowSize = 16000;
+	packet.sequenceNumber = this._sequenceNumber;
+	packet.ackNumber = this._ackNumber;
+	packet.data = dataBuffer;
 
 	console.log("sending packet");
-	console.log(messageBuffer);
+	console.log(packet);
 
-	this._socket.send(messageBuffer, 0, messageBuffer.length, port, address, callback);
+	var packetBuffer = packet.toBuffer();
+	this._socket.send(packetBuffer, 0, packetBuffer.length, port, address, callback);
 };
 
 Connection.prototype._onPacket = function (packet, rinfo) {
@@ -129,14 +169,16 @@ Server.prototype._onMessage = function (msg, rinfo) {
 	var packet = new Packet(msg);
 	var connection = this._connections[packet.connectionId];
 
-	if(connection) {
-		connection._onPacket(packet, rinfo);
-	} else {
+	if(!connection) {
 		if(packet.type === PacketType.Syn) {
-			// make new connection
+			connection = new Connection(this._socket);
 		} else {
 			// Send reset
 		}
+	}
+
+	if(connection) {
+		connection._onPacket(packet, rinfo);
 	}
 };
 
