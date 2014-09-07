@@ -16,12 +16,13 @@ var PacketType = {
 	Syn: 4
 };
 
-function Packet() {
-
+function Packet(buffer) {
+	if(buffer) {
+		this.fromBuffer(buffer);
+	}
 }
 Packet.prototype.type = PacketType.Data;
 Packet.prototype.version = 1;
-Packet.prototype.hasExtensions = false;
 Packet.prototype.connectionId = 0;
 Packet.prototype.timestamp = 0;
 Packet.prototype.timestampDiff = 0;
@@ -32,7 +33,7 @@ Packet.prototype.ackNumber = 0;
 Packet.prototype.fromBuffer = function (msg) {
 	this.type = msg[0] >> 4;
 	this.version = msg[0] & 0xF;
-	this.hasExtensions = msg[1] !== 0;
+	var hasExtensions = msg[1] !== 0;
 	this.connectionId = msg.readUInt16BE(2);
 	this.timestamp = msg.readUInt32BE(4);
 	this.timestampDiff = msg.readUInt32BE(8);
@@ -41,7 +42,7 @@ Packet.prototype.fromBuffer = function (msg) {
 	this.ackNumber = msg.readUInt16BE(18);
 
 	var dataIndex = 20;
-	if(this.hasExtensions) {
+	if(hasExtensions) {
 		this.extensions = {};
 		while (dataIndex < msg.length) {
 			var extensionType = msg[dataIndex++];
@@ -59,30 +60,49 @@ Packet.prototype.fromBuffer = function (msg) {
 };
 
 Packet.prototype.toBuffer = function () {
-	var buffer = new Buffer(20 + ((dataBuffer && dataBuffer.length) || 0));
+	var _this = this;
 
-	buffer.writeUInt8((this.type << 4) + this.version, 0);
-	buffer.writeUInt8(this.hasExtensions ? 1 : 0, 1);
-	buffer.writeUInt16BE(this.connectionId, 2);
-	buffer.writeUInt32BE(this.timestamp, 4);
-	buffer.writeUInt32BE(this.timestampDiff, 8);
-	buffer.writeUInt32BE(this.windowSize, 12);
-	buffer.writeUInt16BE(this.sequenceNumber, 16);
-	buffer.writeUInt16BE(this.ackNumber, 18);
+	var bufferLength = 20;
+	if(_this.extensions) {
+		Object.keys(_this.extensions).forEach(function (extensionType) {
+			// Each extension has 2 bytes of header, and then the actual extension length.
+			bufferLength += 2;
+			bufferLength += _this.extensions[extensionType].length;
+		});
+
+		// The extension list is null terminated, so we need to leave room for that.
+		bufferLength++;
+	}
+	if(_this.data) {
+		bufferLength += _this.data.length;
+	}
+
+	var buffer = new Buffer(bufferLength);
+
+	buffer.writeUInt8((_this.type << 4) + this.version, 0);
+	buffer.writeUInt8(_this.extensions ? 1 : 0, 1);
+	buffer.writeUInt16BE(_this.connectionId, 2);
+	buffer.writeUInt32BE(_this.timestamp, 4);
+	buffer.writeUInt32BE(_this.timestampDiff, 8);
+	buffer.writeUInt32BE(_this.windowSize, 12);
+	buffer.writeUInt16BE(_this.sequenceNumber, 16);
+	buffer.writeUInt16BE(_this.ackNumber, 18);
 
 	var dataIndex = 20;
-	if(this.hasExtensions) {
-		Object.keys(this.extensions).forEach(function (extensionType) {
-			var extension = this.extensions[extensionType];
+	if(_this.extensions) {
+		Object.keys(_this.extensions).forEach(function (extensionType) {
+			var extension = _this.extensions[extensionType];
 			buffer[dataIndex++] = extensionType;
 			buffer[dataIndex++] = extension.length;
 			extension.copy(buffer, dataIndex);
 			dataIndex += extension.length;
 		});
+		// Null-terminate the extension list
+		buffer[dataIndex++] = 0;
 	}
 	
-	if(this.data) {
-		this.data.copy(buffer, dataIndex);
+	if(_this.data) {
+		_this.data.copy(buffer, dataIndex);
 	}
 
 	return buffer;

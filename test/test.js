@@ -27,14 +27,14 @@ function writeHeader(buffer, options) {
 	}
 }
 
-test("packet field parsing", function (t) {
-	// Pick numbers like 1001 in binary to test 
-	// that we're parsing the boundaries correctly.
-	var test4 = 0x9;
-	var test8 = 0x81;
-	var test16 = 0x8001;
-	var test32 = 0x80000001;
+// Pick numbers like 1001 in binary to test 
+// that we're parsing the boundaries correctly.
+var test4 = 0x9;
+var test8 = 0x81;
+var test16 = 0x8001;
+var test32 = 0x80000001;
 
+test("packet field parsing", function (t) {
 	// 20 bytes for the header, 1 null byte for the "extension"
 	var buffer = new Buffer(21);
 	var headerOptions = {
@@ -56,7 +56,7 @@ test("packet field parsing", function (t) {
 
 	for(var field in headerOptions) {
 		if(field === "extension") {
-			t.equal(packet.hasExtensions, true, "hasExtensions");
+			t.ok(packet.extensions, "extensions should exist");
 		} else {
 			t.equal(packet[field], headerOptions[field], field);
 		}
@@ -85,7 +85,6 @@ test("packet extension parsing", function(t) {
 	var packet = new uTP.Packet(buffer);
 	console.log(packet);
 
-	t.ok(packet.hasExtensions, "this packet has extensions");
 	t.ok(packet.extensions, "this packet has an extension map");
 
 	var extensionBuffer = packet.extensions[5];
@@ -115,7 +114,6 @@ test("packet extension parsing with data", function(t) {
 	var packet = new uTP.Packet(buffer);
 	console.log(packet);
 
-	t.ok(packet.hasExtensions, "this packet has extensions");
 	t.ok(packet.extensions, "this packet has an extension map");
 
 	var extensionBuffer = packet.extensions[5];
@@ -129,7 +127,7 @@ test("packet extension parsing with data", function(t) {
 	t.end();
 });
 
-test("packet parsing with data and no extensions", function(t) {
+test("packet parsing with data and no extensions", function (t) {
 	// 20 bytes for the header, 5 bytes for data
 	var buffer = new Buffer(25);
 	var headerOptions = {
@@ -145,7 +143,6 @@ test("packet parsing with data and no extensions", function(t) {
 	var packet = new uTP.Packet(buffer);
 	console.log(packet);
 
-	t.notOk(packet.hasExtensions, "this packet has no extensions");
 	t.notOk(packet.extensions, "this packet has no extension map");
 
 	t.equal(packet.data.length, 5, "data should be 5 bytes");
@@ -154,6 +151,78 @@ test("packet parsing with data and no extensions", function(t) {
 	t.equal(packet.data[2], 2);
 	t.equal(packet.data[3], 3);
 	t.equal(packet.data[4], 4);
+
+	t.end();
+});
+
+test("packet serialization with no data and no extensions", function (t) {
+	var packet = new uTP.Packet();
+	packet.type = test4;
+	packet.version = test4 + 1;
+	packet.connectionId = test16;
+	packet.timestamp = test32;
+	packet.timestampDiff = test32;
+	packet.windowSize = test32;
+	packet.sequenceNumber = test16;
+	packet.ackNumber = test16;
+
+	var buffer = packet.toBuffer();
+
+	t.equal(buffer.length, 20, "buffer should only contain the header");
+	t.equal(buffer[0] & 0xF, test4 + 1, "version");
+	t.equal(buffer[0] >> 4, test4, "type");
+	t.equal(buffer[1], 0, "extension");
+	t.equal(buffer.readUInt16BE(2), test16, "connectionId");
+	t.equal(buffer.readUInt32BE(4), test32, "timestamp");
+	t.equal(buffer.readUInt32BE(8), test32, "timestampDiff");
+	t.equal(buffer.readUInt32BE(12), test32, "windowSize");
+	t.equal(buffer.readUInt16BE(16), test16, "sequenceNumber");
+	t.equal(buffer.readUInt16BE(18), test16, "ackNumber");
+
+	t.end();
+});
+
+test("packet serialization with some data and no extensions", function (t) {
+	var packet = new uTP.Packet();
+	var dataBuffer = new Buffer(10);
+	dataBuffer.fill(1);
+	packet.data = dataBuffer;
+
+	var packetBuffer = packet.toBuffer();
+	t.equal(packetBuffer.length, 30, "should be header and data");
+	for(var i = 0; i < 10; i++) {
+		t.equal(packetBuffer[20 + i], dataBuffer[i], "data should be equal");
+	}
+
+	t.end();
+});
+
+test("packet serialization with some data and some extensions", function (t) {
+	var packet = new uTP.Packet();
+
+	var dataBuffer = new Buffer(10);
+	dataBuffer.fill(1);
+	packet.data = dataBuffer;
+
+	var extensionBuffer = new Buffer(10);
+	extensionBuffer.fill(2);
+	packet.extensions = {
+		5: extensionBuffer
+	};
+
+	var packetBuffer = packet.toBuffer();
+	t.equal(packetBuffer.length, 43, "should be long enough to hold header, data and extensions");
+
+	t.equal(packetBuffer[20], 5, "extension is of type 5");
+	t.equal(packetBuffer[21], 10, "the extension is of length 10");
+	for(var i = 0; i < 10; i++) {
+		t.equal(packetBuffer[22 + i], extensionBuffer[i], "extension should be equal");
+	}
+	t.equal(packetBuffer[32], 0, "the extension list should be null terminated");
+
+	for(var i = 0; i < 10; i++) {
+		t.equal(packetBuffer[33 + i], dataBuffer[i], "data should be equal");
+	}
 
 	t.end();
 });
