@@ -7,6 +7,11 @@ function rand16() {
 	return Math.floor(Math.random() * 65535);
 }
 
+function getMicroseconds() {
+	var hrTime = process.hrtime();
+	return hrTime[0] * 1e9 + hrTime[1];
+}
+
 // Type constants
 var PacketType = {
 	Data: 0,
@@ -111,37 +116,36 @@ Packet.prototype.toBuffer = function () {
 exports.Packet = Packet;
 
 inherits(Connection, stream.Duplex);
-function Connection (socket) {
+function Connection (port, address, socket) {
 	stream.Duplex.call(this);
 
-	this._connectionId = 0;
-	this._currentWindow = 0;
-	this._maxWindow = 0;
-	this._windowSize = 0;
-	this._replyMicroseconds = 0;
-	this._sequenceNumber = 1;
-	this._ackNumber = 0;
-
+	this._port = port;
+	this._address = address;
 	this._socket = socket;
 }
+Connection.prototype._connectionId = 0;
+Connection.prototype._currentWindow = 0;
+Connection.prototype._maxWindow = 0;
+Connection.prototype._windowSize = 0;
+Connection.prototype._replyMicroseconds = 0;
+Connection.prototype._sequenceNumber = 1;
+Connection.prototype._ackNumber = 0;
 
-Connection.prototype._writeMessage = function (type, dataBuffer, port, address, callback) {
+Connection.prototype._writeMessage = function (type, dataBuffer, callback) {
 	var packet = new Packet();
 	
 	packet.type = type;
 	packet.connectionId = this._connectionId;
-	packet.timestamp = process.hrtime()[1];
 	packet.timestampDiff = this._replyMicroseconds;
 	packet.windowSize = 16000;
 	packet.sequenceNumber = this._sequenceNumber;
 	packet.ackNumber = this._ackNumber;
 	packet.data = dataBuffer;
-
-	console.log("sending packet");
-	console.log(packet);
+	packet.timestamp = getMicroseconds();
 
 	var packetBuffer = packet.toBuffer();
-	this._socket.send(packetBuffer, 0, packetBuffer.length, port, address, callback);
+	this._socket.send(packetBuffer, 0, packetBuffer.length, 
+		this._port, this._address, callback);
 };
 
 Connection.prototype._onPacket = function (packet, rinfo) {
@@ -158,8 +162,9 @@ Connection.prototype._onPacket = function (packet, rinfo) {
 				break;
 		}
 
+		this._replyMicroseconds = Math.abs(getMicroseconds() - packet.timestamp);
 		this._ackNumber = packet.sequenceNumber;
-		this._writeMessage(PacketType.State, null, rinfo.port, rinfo.address);
+		this._writeMessage(PacketType.State);
 	}
 			
 };
@@ -191,7 +196,7 @@ Server.prototype._onMessage = function (msg, rinfo) {
 
 	if(!connection) {
 		if(packet.type === PacketType.Syn) {
-			connection = new Connection(this._socket);
+			connection = new Connection(rinfo.port, rinfo.address, this._socket);
 		} else {
 			// Send reset
 		}
