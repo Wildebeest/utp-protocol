@@ -54,8 +54,7 @@ test("packet field parsing", function (t) {
 	buffer[20] = 0;
 
 	var packet = new uTP.Packet(buffer);
-	console.log(packet);
-
+	
 	for(var field in headerOptions) {
 		if(field === "extension") {
 			t.ok(packet.extensions, "extensions should exist");
@@ -64,15 +63,14 @@ test("packet field parsing", function (t) {
 		}
 	}
 
-	t.ok(packet.data, "data should exist");
-	t.equal(packet.data.length, 0, "data should be empty");
+	t.equal(packet.data, null, "data should not exist");
 
 	t.end();
 });
 
 test("packet extension parsing", function(t) {
-	// 20 bytes for the header, 5 bytes for the "extension", 1 byte for termination
-	var buffer = new Buffer(26);
+	// 20 bytes for the header, 5 bytes for the "extension", 1 byte for termination, 1 byte for data
+	var buffer = new Buffer(27);
 	var headerOptions = {
 		extension: 1
 	};
@@ -83,6 +81,7 @@ test("packet extension parsing", function(t) {
 	buffer[23] = 0;
 	buffer[24] = 1;
 	buffer[25] = 0;		// null terminator
+	buffer[26] = 9;		// data
 
 	var packet = new uTP.Packet(buffer);
 	console.log(packet);
@@ -94,7 +93,8 @@ test("packet extension parsing", function(t) {
 	t.equal(extensionBuffer.length, 3, "the extension should be 3 bytes");
 	t.equal(extensionBuffer[0], 1);
 	t.equal(extensionBuffer[2], 1);
-	t.equal(packet.data.length, 0, "data should be empty");
+	t.equal(packet.data.length, 1);
+	t.equal(packet.data[0], 9);
 
 	t.end();
 });
@@ -237,9 +237,9 @@ test("send syn to connection", function (t) {
 			t.equal(port, PORT, "port");
 			t.equal(address, ADDRESS, "address");
 
+			t.equal(packetBuffer.length, 20, "packet should just be a header");
 			var packet = new uTP.Packet(packetBuffer);
 			t.equal(packet.type, uTP.PacketType.State, "packet should be ack type");
-			t.equal(packet.data.length, 0, "packet should be empty");
 			t.equal(packet.connectionId, 1234, "connectionId");
 			t.equal(packet.ackNumber, 2, "acking this packet");
 

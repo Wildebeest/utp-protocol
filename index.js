@@ -39,6 +39,7 @@ Packet.prototype.timestampDiff = 0;
 Packet.prototype.windowSize = 0;
 Packet.prototype.sequenceNumber = 0;
 Packet.prototype.ackNumber = 0;
+Packet.prototype.data = null;
 
 Packet.prototype.fromBuffer = function (msg) {
 	this.type = msg[0] >> 4;
@@ -66,7 +67,9 @@ Packet.prototype.fromBuffer = function (msg) {
 		}
 	}
 
-	this.data = msg.slice(dataIndex);
+	if(this.type === PacketType.Data) {
+		this.data = msg.slice(dataIndex);
+	}
 };
 
 Packet.prototype.toBuffer = function () {
