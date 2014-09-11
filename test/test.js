@@ -2,6 +2,8 @@ var uTP = require('../');
 var test = require('tape');
 var dgram = require('dgram');
 var merge = require('merge');
+var inherits = require("inherits");
+var events = require("events");
 
 function writeHeader(buffer, options) {
 	if(buffer) {
@@ -227,20 +229,32 @@ test("packet serialization with some data and some extensions", function (t) {
 	t.end();
 });
 
-test.skip('constructor', function (t) {
-	t.plan(1);
+test("send syn to connection", function (t) {
+	var PORT = 1337, ADDRESS = "192.168.0.1";
 
-	var socket = dgram.createSocket('udp4');
-	var stream = new uTP(socket);
-	socket.bind(1337);
+	var mockSocket = {
+		send: function (packetBuffer, bufferStart, bufferEnd, port, address, callback) {
+			t.equal(port, PORT, "port");
+			t.equal(address, ADDRESS, "address");
 
-	stream.on('data', function(chunk) {
-	  console.log('got %d bytes of data', chunk.length);
-	  console.log(chunk.toString());
-	});
-	stream.on('end', function() {
-	  console.log('there will be no more data.');
-	  t.ok(true);
-	});
+			var packet = new uTP.Packet(packetBuffer);
+			t.equal(packet.type, uTP.PacketType.State, "packet should be ack type");
+			t.equal(packet.data.length, 0, "packet should be empty");
+			t.equal(packet.connectionId, 1234, "connectionId");
+			t.equal(packet.ackNumber, 2, "acking this packet");
 
+			t.end();
+		}
+	};
+
+	var connection = new uTP.Connection(PORT, ADDRESS, mockSocket);
+
+	var synPacket = new uTP.Packet();
+	synPacket.type = uTP.PacketType.Syn;
+	synPacket.sequenceNumber = 2;
+	synPacket.connectionId = 1234;
+	connection._onPacket(synPacket);
 });
+
+
+

@@ -7,9 +7,13 @@ function rand16() {
 	return Math.floor(Math.random() * 65535);
 }
 
+function next16(num) {
+	return (num + 1) % 65536;
+}
+
 function getMicroseconds() {
 	var hrTime = process.hrtime();
-	return hrTime[0] * 1e9 + hrTime[1];
+	return hrTime[1];
 }
 
 // Type constants
@@ -20,6 +24,7 @@ var PacketType = {
 	Reset: 3,
 	Syn: 4
 };
+exports.PacketType = PacketType;
 
 function Packet(buffer) {
 	if(buffer) {
@@ -148,14 +153,15 @@ Connection.prototype._writeMessage = function (type, dataBuffer, callback) {
 		this._port, this._address, callback);
 };
 
-Connection.prototype._onPacket = function (packet, rinfo) {
-	if(packet.type === PacketType.Syn || (this._ackNumber + 1 === packet.sequenceNumber)) {
+Connection.prototype._onPacket = function (packet) {
+	if(packet.type === PacketType.Syn || (next16(this._ackNumber) === packet.sequenceNumber)) {
 		switch(packet.type) {
 			case PacketType.Syn:
 				this._connectionId = packet.connectionId;
+				this._sequenceNumber = rand16();
 				break;
 			case PacketType.Data:
-				this.push(packet.data); 
+				this.push(packet.data);
 				break;
 			case PacketType.Fin:
 				this.push(null);
@@ -196,14 +202,18 @@ Server.prototype._onMessage = function (msg, rinfo) {
 
 	if(!connection) {
 		if(packet.type === PacketType.Syn) {
-			connection = new Connection(rinfo.port, rinfo.address, this._socket);
+			var recvConnectionId = next16(packet.connectionId);
+			if(!this._connections.hasOwnProperty(recvConnectionId)) {
+				connection = new Connection(rinfo.port, rinfo.address, this._socket);
+				this._connections[recvConnectionId] = connection;
+			}
 		} else {
 			// Send reset
 		}
 	}
 
 	if(connection) {
-		connection._onPacket(packet, rinfo);
+		connection._onPacket(packet);
 	}
 };
 
