@@ -73,38 +73,38 @@ Packet.prototype.fromBuffer = function (msg) {
 };
 
 Packet.prototype.toBuffer = function () {
-	var _this = this;
+	var self = this;
 
 	var bufferLength = 20;
-	if(_this.extensions) {
-		Object.keys(_this.extensions).forEach(function (extensionType) {
+	if(self.extensions) {
+		Object.keys(self.extensions).forEach(function (extensionType) {
 			// Each extension has 2 bytes of header, and then the actual extension length.
 			bufferLength += 2;
-			bufferLength += _this.extensions[extensionType].length;
+			bufferLength += self.extensions[extensionType].length;
 		});
 
 		// The extension list is null terminated, so we need to leave room for that.
 		bufferLength++;
 	}
-	if(_this.data) {
-		bufferLength += _this.data.length;
+	if(self.data) {
+		bufferLength += self.data.length;
 	}
 
 	var buffer = new Buffer(bufferLength);
 
-	buffer.writeUInt8((_this.type << 4) + this.version, 0);
-	buffer.writeUInt8(_this.extensions ? 1 : 0, 1);
-	buffer.writeUInt16BE(_this.connectionId, 2);
-	buffer.writeUInt32BE(_this.timestamp, 4);
-	buffer.writeUInt32BE(_this.timestampDiff, 8);
-	buffer.writeUInt32BE(_this.windowSize, 12);
-	buffer.writeUInt16BE(_this.sequenceNumber, 16);
-	buffer.writeUInt16BE(_this.ackNumber, 18);
+	buffer.writeUInt8((self.type << 4) + this.version, 0);
+	buffer.writeUInt8(self.extensions ? 1 : 0, 1);
+	buffer.writeUInt16BE(self.connectionId, 2);
+	buffer.writeUInt32BE(self.timestamp, 4);
+	buffer.writeUInt32BE(self.timestampDiff, 8);
+	buffer.writeUInt32BE(self.windowSize, 12);
+	buffer.writeUInt16BE(self.sequenceNumber, 16);
+	buffer.writeUInt16BE(self.ackNumber, 18);
 
 	var dataIndex = 20;
-	if(_this.extensions) {
-		Object.keys(_this.extensions).forEach(function (extensionType) {
-			var extension = _this.extensions[extensionType];
+	if(self.extensions) {
+		Object.keys(self.extensions).forEach(function (extensionType) {
+			var extension = self.extensions[extensionType];
 			buffer[dataIndex++] = extensionType;
 			buffer[dataIndex++] = extension.length;
 			extension.copy(buffer, dataIndex);
@@ -114,8 +114,8 @@ Packet.prototype.toBuffer = function () {
 		buffer[dataIndex++] = 0;
 	}
 	
-	if(_this.data) {
-		_this.data.copy(buffer, dataIndex);
+	if(self.data) {
+		self.data.copy(buffer, dataIndex);
 	}
 
 	return buffer;

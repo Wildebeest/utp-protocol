@@ -256,5 +256,50 @@ test("send syn to connection", function (t) {
 	connection._onPacket(synPacket);
 });
 
+test("send data to connection", function (t) {
+	var PORT = 1337, ADDRESS = "192.168.0.1";
+
+	t.plan(7);
+
+	function sendDataPacket(packetBuffer, bufferStart, bufferEnd, port, address, callback) {
+		mockSocket.send = validateAckPacket;
+
+		var dataPacket = new uTP.Packet();
+		dataPacket.type = uTP.PacketType.Data;
+		dataPacket.sequenceNumber = 3;
+		dataPacket.connectionId = 1235;
+		dataPacket.data = new Buffer("uTP is awesome");
+
+		connection.on("data", function(data) {
+			t.equal(data.toString(), "uTP is awesome", "data is submitted to stream");
+		});
+
+		connection._onPacket(dataPacket);
+	}
+
+	function validateAckPacket(packetBuffer, bufferStart, bufferEnd, port, address, callback) {
+		t.equal(port, PORT, "port");
+		t.equal(address, ADDRESS, "address");
+		t.equal(packetBuffer.length, 20, "packet should just be a header");
+
+		var packet = new uTP.Packet(packetBuffer);
+		t.equal(packet.type, uTP.PacketType.State, "packet should be ack type");
+		t.equal(packet.connectionId, 1234, "connectionId");
+		t.equal(packet.ackNumber, 3, "acking this packet");
+	}
+
+	var mockSocket = {
+		send: sendDataPacket
+	};
+
+	var connection = new uTP.Connection(PORT, ADDRESS, mockSocket);
+
+	var synPacket = new uTP.Packet();
+	synPacket.type = uTP.PacketType.Syn;
+	synPacket.sequenceNumber = 2;
+	synPacket.connectionId = 1234;
+	connection._onPacket(synPacket);
+});
+
 
 
