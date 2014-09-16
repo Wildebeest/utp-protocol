@@ -2,6 +2,7 @@ var inherits = require("inherits");
 var stream = require("stream");
 var dgram = require("dgram");
 var net = require("net");
+var EventEmitter = require("events").EventEmitter;
 
 function rand16() {
 	return Math.floor(Math.random() * 65535);
@@ -40,6 +41,7 @@ Packet.prototype.windowSize = 0;
 Packet.prototype.sequenceNumber = 0;
 Packet.prototype.ackNumber = 0;
 Packet.prototype.data = null;
+Packet.prototype.timesSent = 0;
 
 Packet.prototype.fromBuffer = function (msg) {
 	this.type = msg[0] >> 4;
@@ -123,6 +125,8 @@ Packet.prototype.toBuffer = function () {
 
 exports.Packet = Packet;
 
+var MaxPacketTimesSent = 5;
+
 inherits(Connection, stream.Duplex);
 function Connection (port, address, socket) {
 	stream.Duplex.call(this);
@@ -130,6 +134,8 @@ function Connection (port, address, socket) {
 	this._port = port;
 	this._address = address;
 	this._socket = socket;
+	this._pendingPacket = null;
+	this._retryTimeoutId = null;
 }
 Connection.prototype._connectionId = 0;
 Connection.prototype._currentWindow = 0;
@@ -138,8 +144,9 @@ Connection.prototype._windowSize = 0;
 Connection.prototype._replyMicroseconds = 0;
 Connection.prototype._sequenceNumber = 1;
 Connection.prototype._ackNumber = 0;
+Connection.prototype._retryMs = 1000;
 
-Connection.prototype._writeMessage = function (type, dataBuffer, callback) {
+Connection.prototype._writeMessage = function (type, dataBuffer) {
 	var packet = new Packet();
 	
 	packet.type = type;
@@ -148,40 +155,77 @@ Connection.prototype._writeMessage = function (type, dataBuffer, callback) {
 	packet.windowSize = 16000;
 	packet.sequenceNumber = this._sequenceNumber;
 	packet.ackNumber = this._ackNumber;
-	packet.data = dataBuffer;
+	if(dataBuffer) {
+		packet.data = dataBuffer;
+	}
 	packet.timestamp = getMicroseconds();
 
-	var packetBuffer = packet.toBuffer();
-	this._socket.send(packetBuffer, 0, packetBuffer.length, 
-		this._port, this._address, callback);
+	if(type !== PacketType.State) {
+		this._pendingPacket = packet;
+	}
+
+	this._sendPacket(packet);
+};
+
+Connection.prototype._sendPacket = function(packet) {
+	if(packet.timesSent < MaxPacketTimesSent) {
+		var packetBuffer = packet.toBuffer();
+		this._socket.send(packetBuffer, 0, packetBuffer.length, this._port, this._address);
+		if(!this._retryTimeoutId) {
+			this._retryTimeoutId = setTimeout(this._retryMessage.bind(this), this._retryMs);
+		}
+		packet.timesSent++;
+	} else {
+		// Timeout the connection
+	}
+};
+
+Connection.prototype._retryMessage = function () {
+	if(this._pendingPacket) {
+		this._sendPacket(this._pendingPacket);
+	}
+};
+
+Connection.prototype._ackMessage = function (packet) {
+	this._replyMicroseconds = Math.abs(getMicroseconds() - packet.timestamp);
+	this._ackNumber = packet.sequenceNumber;
+	this._writeMessage(PacketType.State);
 };
 
 Connection.prototype._onPacket = function (packet) {
-	if(packet.type === PacketType.Syn || (next16(this._ackNumber) === packet.sequenceNumber)) {
-		switch(packet.type) {
-			case PacketType.Syn:
-				this._connectionId = packet.connectionId;
-				this._sequenceNumber = rand16();
-				break;
-			case PacketType.Data:
+	switch(packet.type) {
+		case PacketType.Syn:
+			this._connectionId = packet.connectionId;
+			this._sequenceNumber = rand16();
+			this._ackMessage(packet);
+			break;
+		case PacketType.State:
+			if(this._pendingPacket && (packet.ackNumber === this._pendingPacket.sequenceNumber)) {
+				clearTimeout(this._retryTimeoutId);
+				this._retryTimeoutId = null;
+				this._pendingPacket = null;
+			}
+			break;
+		case PacketType.Data:
+			if(next16(this._ackNumber) === packet.sequenceNumber) {
 				this.push(packet.data);
-				break;
-			case PacketType.Fin:
-				this.push(null);
-				break;
-		}
+				this._ackMessage(packet);
+			}
+			break;
+		case PacketType.Fin:
+			this.push(null);
+			break;
+	}		
+};
 
-		this._replyMicroseconds = Math.abs(getMicroseconds() - packet.timestamp);
-		this._ackNumber = packet.sequenceNumber;
-		this._writeMessage(PacketType.State);
-	}
-			
+Connection.prototype._connect = function () {
+	this._writeMessage(PacketType.Syn);
 };
 
 // Readable implementation
 Connection.prototype._read = function (size) {
 
-}
+};
 
 // Writable implementation
 Connection.prototype._write = function (chunk, encoding, callback) {
@@ -189,7 +233,10 @@ Connection.prototype._write = function (chunk, encoding, callback) {
 };
 exports.Connection = Connection;
 
+inherits(Server, EventEmitter);
 function Server (socket) {
+	EventEmitter.call(this);
+	
 	this._connections = { };
 	this._socket = socket;
 	socket.on("message", this._onMessage.bind(this));
@@ -209,6 +256,7 @@ Server.prototype._onMessage = function (msg, rinfo) {
 			if(!this._connections.hasOwnProperty(recvConnectionId)) {
 				connection = new Connection(rinfo.port, rinfo.address, this._socket);
 				this._connections[recvConnectionId] = connection;
+				this.emit("connection", connection);
 			}
 		} else {
 			// Send reset
@@ -220,9 +268,23 @@ Server.prototype._onMessage = function (msg, rinfo) {
 	}
 };
 
+Server.prototype._connect = function (port, address) {
+	var connection = new Connection(port, address, this._socket);
+	var connectionId = rand16();
+	this._connections[connectionId] = connection;
+	connection._connect(connectionId);
+	return connection;
+};
+
 exports.Server = Server;
 
 exports.createServer = function () {
 	var socket = dgram.createSocket("udp4");
 	return new Server(socket);
+};
+
+exports.createConnection = function (port, host, connectListener) {
+	var server = exports.createServer();
+	server.bind();
+	return server._connect();
 };

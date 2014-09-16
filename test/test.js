@@ -301,5 +301,65 @@ test("send data to connection", function (t) {
 	connection._onPacket(synPacket);
 });
 
+test("open connection", function (t) {
+	var PORT = 1337, ADDRESS = "192.168.0.1";
+
+	var mockSocket = {
+		send: function (packetBuffer, bufferStart, bufferEnd, port, address, callback) {
+			t.equal(port, PORT, "port");
+			t.equal(address, ADDRESS, "address");
+
+			t.equal(packetBuffer.length, 20, "packet should just be a header");
+			var packet = new uTP.Packet(packetBuffer);
+			t.equal(packet.type, uTP.PacketType.Syn, "packet should be syn type");
+			t.equal(packet.sequenceNumber, 1, "syn should always be packet 1");
+
+			var ackPacket = new uTP.Packet();
+			ackPacket.type = uTP.PacketType.State;
+			ackPacket.sequenceNumber = 1234;
+			ackPacket.ackNumber = packet.sequenceNumber;
+			ackPacket.connectionId = packet.connectionId;
+			connection._onPacket(ackPacket);
+
+			t.end();
+		}
+	};
+
+	var connection = new uTP.Connection(PORT, ADDRESS, mockSocket);
+	connection._connect();
+});
+
+test("open connection miss 2 syns", function (t) {
+	var PORT = 1337, ADDRESS = "192.168.0.1";
+
+	var synCount = 0;
+	var mockSocket = {
+		send: function (packetBuffer, bufferStart, bufferEnd, port, address, callback) {
+			t.equal(port, PORT, "port");
+			t.equal(address, ADDRESS, "address");
+
+			t.equal(packetBuffer.length, 20, "packet should just be a header");
+			var packet = new uTP.Packet(packetBuffer);
+			t.equal(packet.type, uTP.PacketType.Syn, "packet should be syn type");
+			t.equal(packet.sequenceNumber, 1, "syn should always be packet 1");
+			synCount++;
+
+			if(synCount == 2) {
+				var ackPacket = new uTP.Packet();
+				ackPacket.type = uTP.PacketType.State;
+				ackPacket.sequenceNumber = 1234;
+				ackPacket.ackNumber = packet.sequenceNumber;
+				ackPacket.connectionId = packet.connectionId;
+				connection._onPacket(ackPacket);
+
+				t.end();
+			}
+		}
+	};
+
+	var connection = new uTP.Connection(PORT, ADDRESS, mockSocket);
+	connection._connect();
+});
+
 
 
