@@ -138,13 +138,18 @@ function Connection (port, address, socket) {
 	this._retryTimeoutId = null;
 }
 Connection.prototype._connectionId = 0;
+Connection.prototype._packetSize = 1435;
 Connection.prototype._currentWindow = 0;
-Connection.prototype._maxWindow = 0;
+Connection.prototype._maxWindow = 16000;
 Connection.prototype._windowSize = 0;
 Connection.prototype._replyMicroseconds = 0;
 Connection.prototype._sequenceNumber = 1;
 Connection.prototype._ackNumber = 0;
 Connection.prototype._retryMs = 1000;
+
+Connection.prototype._chunk = null;
+Connection.prototype._chunkCallback = null;
+Connection.prototype._chunkStart = 0;
 
 Connection.prototype._writeMessage = function (type, dataBuffer) {
 	var packet = new Packet();
@@ -192,6 +197,17 @@ Connection.prototype._ackMessage = function (packet) {
 	this._writeMessage(PacketType.State);
 };
 
+Connection.prototype._writeNextChunk = function () {
+	if(this._chunk) {
+		var packetSize = Math.min(this._chunk.length - this._chunkStart, this._packetSize);
+		if(packetSize) {
+			this._writeMessage(PacketType.Data, this._chunk.slice(this._chunkStart, this._chunkStart + packetSize));
+		} else {
+			this._chunkCallback();
+		}
+	}
+};
+
 Connection.prototype._onPacket = function (packet) {
 	switch(packet.type) {
 		case PacketType.Syn:
@@ -201,9 +217,17 @@ Connection.prototype._onPacket = function (packet) {
 			break;
 		case PacketType.State:
 			if(this._pendingPacket && (packet.ackNumber === this._pendingPacket.sequenceNumber)) {
+				this._sequenceNumber++;
+
+				if(this._pendingPacket.type === PacketType.Data) {
+					this._chunkStart += this._pendingPacket.data.length;
+				}
+
 				clearTimeout(this._retryTimeoutId);
 				this._retryTimeoutId = null;
 				this._pendingPacket = null;
+				
+				this._writeNextChunk();
 			}
 			break;
 		case PacketType.Data:
@@ -213,7 +237,10 @@ Connection.prototype._onPacket = function (packet) {
 			}
 			break;
 		case PacketType.Fin:
-			this.push(null);
+			if(next16(this._ackNumber) === packet.sequenceNumber) {
+				this.push(null);
+				this._ackMessage(packet);
+			}
 			break;
 	}		
 };
@@ -229,7 +256,11 @@ Connection.prototype._read = function (size) {
 
 // Writable implementation
 Connection.prototype._write = function (chunk, encoding, callback) {
-
+	this._chunk = chunk;
+	this._chunkCallback = callback;
+	if(!this._pendingPacket) {
+		this._writeNextChunk();
+	}
 };
 exports.Connection = Connection;
 
