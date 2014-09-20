@@ -199,11 +199,16 @@ Connection.prototype._ackMessage = function (packet) {
 
 Connection.prototype._writeNextChunk = function () {
 	if(this._chunk) {
+		var maxPacketSize = Math.min(this._windowSize, this._packetSize);
 		var packetSize = Math.min(this._chunk.length - this._chunkStart, this._packetSize);
 		if(packetSize) {
 			this._writeMessage(PacketType.Data, this._chunk.slice(this._chunkStart, this._chunkStart + packetSize));
-		} else {
+		} else if(this._chunk.length === this._chunkStart) {
 			this._chunkCallback();
+
+			this._chunk = null;
+			this._chunkCallback = null;
+			this._chunkStart = 0;
 		}
 	}
 };
@@ -213,11 +218,13 @@ Connection.prototype._onPacket = function (packet) {
 		case PacketType.Syn:
 			this._connectionId = packet.connectionId;
 			this._sequenceNumber = rand16();
+			this._windowSize = packet.windowSize;
 			this._ackMessage(packet);
 			break;
 		case PacketType.State:
 			if(this._pendingPacket && (packet.ackNumber === this._pendingPacket.sequenceNumber)) {
 				this._sequenceNumber++;
+				this._windowSize = packet.windowSize;
 
 				if(this._pendingPacket.type === PacketType.Data) {
 					this._chunkStart += this._pendingPacket.data.length;
@@ -232,6 +239,7 @@ Connection.prototype._onPacket = function (packet) {
 			break;
 		case PacketType.Data:
 			if(next16(this._ackNumber) === packet.sequenceNumber) {
+				this._windowSize = packet.windowSize;
 				this.push(packet.data);
 				this._ackMessage(packet);
 			}
