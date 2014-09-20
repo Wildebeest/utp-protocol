@@ -313,6 +313,7 @@ test("open connection", function (t) {
 			var packet = new uTP.Packet(packetBuffer);
 			t.equal(packet.type, uTP.PacketType.Syn, "packet should be syn type");
 			t.equal(packet.sequenceNumber, 1, "syn should always be packet 1");
+			t.equal(packet.connectionId, 4567, "connectionId should be correct");
 
 			var ackPacket = new uTP.Packet();
 			ackPacket.type = uTP.PacketType.State;
@@ -326,7 +327,7 @@ test("open connection", function (t) {
 	};
 
 	var connection = new uTP.Connection(PORT, ADDRESS, mockSocket);
-	connection._connect();
+	connection._connect(4567);
 });
 
 test("open connection miss 2 syns", function (t) {
@@ -342,6 +343,7 @@ test("open connection miss 2 syns", function (t) {
 			var packet = new uTP.Packet(packetBuffer);
 			t.equal(packet.type, uTP.PacketType.Syn, "packet should be syn type");
 			t.equal(packet.sequenceNumber, 1, "syn should always be packet 1");
+			t.equal(packet.connectionId, 4567, "connectionId should be correct");
 			synCount++;
 
 			if(synCount == 2) {
@@ -358,13 +360,13 @@ test("open connection miss 2 syns", function (t) {
 	};
 
 	var connection = new uTP.Connection(PORT, ADDRESS, mockSocket);
-	connection._connect();
+	connection._connect(4567);
 });
 
 test("open connection and send data", function (t) {
 	var PORT = 1337, ADDRESS = "192.168.0.1";
 
-	t.plan(11);
+	t.plan(13);
 
 	function ackSyn(packetBuffer, bufferStart, bufferEnd, port, address, callback) {
 		t.equal(port, PORT, "port");
@@ -374,6 +376,7 @@ test("open connection and send data", function (t) {
 		var packet = new uTP.Packet(packetBuffer);
 		t.equal(packet.type, uTP.PacketType.Syn, "packet should be syn type");
 		t.equal(packet.sequenceNumber, 1, "syn should always be packet 1");
+		t.equal(packet.connectionId, 4567, "connectionId should be correct");
 
 		mockSocket.send = ackData;
 
@@ -393,6 +396,7 @@ test("open connection and send data", function (t) {
 		var packet = new uTP.Packet(packetBuffer);
 		t.equal(packet.type, uTP.PacketType.Data, "packet should be data type");
 		t.equal(packet.sequenceNumber, 2, "data should be after syn");
+		t.equal(packet.connectionId, 4567, "connectionId should be correct");
 
 		var ackPacket = new uTP.Packet();
 		ackPacket.type = uTP.PacketType.State;
@@ -407,7 +411,7 @@ test("open connection and send data", function (t) {
 	};
 
 	var connection = new uTP.Connection(PORT, ADDRESS, mockSocket);
-	connection._connect();
+	connection._connect(4567);
 	connection.write("hello", function () {
 		t.pass("called the write callback");
 	});

@@ -253,7 +253,8 @@ Connection.prototype._onPacket = function (packet) {
 	}		
 };
 
-Connection.prototype._connect = function () {
+Connection.prototype._connect = function (connectionId) {
+	this._connectionId = connectionId;
 	this._writeMessage(PacketType.Syn);
 };
 
@@ -282,7 +283,7 @@ function Server (socket) {
 }
 
 Server.prototype.listen = function (port) {
-	this.socket.bind(port);
+	this._socket.bind(port);
 };
 
 Server.prototype._onMessage = function (msg, rinfo) {
@@ -324,6 +325,6 @@ exports.createServer = function () {
 
 exports.createConnection = function (port, host, connectListener) {
 	var server = exports.createServer();
-	server.bind();
-	return server._connect();
+	server.listen();
+	return server._connect(port, host);
 };
