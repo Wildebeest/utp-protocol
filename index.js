@@ -256,6 +256,7 @@ Connection.prototype._onPacket = function (packet) {
 Connection.prototype._connect = function (connectionId) {
 	this._connectionId = connectionId;
 	this._writeMessage(PacketType.Syn);
+	this._connectionId = next16(connectionId);
 };
 
 // Readable implementation

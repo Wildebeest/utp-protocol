@@ -396,7 +396,7 @@ test("open connection and send data", function (t) {
 		var packet = new uTP.Packet(packetBuffer);
 		t.equal(packet.type, uTP.PacketType.Data, "packet should be data type");
 		t.equal(packet.sequenceNumber, 2, "data should be after syn");
-		t.equal(packet.connectionId, 4567, "connectionId should be correct");
+		t.equal(packet.connectionId, 4568, "connectionId should be correct");
 
 		var ackPacket = new uTP.Packet();
 		ackPacket.type = uTP.PacketType.State;
